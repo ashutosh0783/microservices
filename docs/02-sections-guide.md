@@ -33,16 +33,17 @@ The principles behind the rest of the course (config in the environment, statele
 `@ConfigurationProperties` records (`AccountsContactInfoDto`), plus overriding config through env vars / command line.
 **`v2-spring-cloud-config`:** adds the **`configserver`** service (reads a Git/classpath/file repo) and turns the
 business services into config *clients* (`spring.config.import: optional:configserver:http://localhost:8071/`).
-Also shows `/actuator/refresh` for live refresh, Spring Cloud Bus (RabbitMQ) refresh, and `/encrypt` for secrets.
+Also shows `/actuator/refresh` for live refresh, Spring Cloud Bus (RabbitMQ) refresh, and `/encrypt` for secrets. `v2` is also where **Docker Compose with `default`/`qa`/`prod` profile folders** and shared `common-config.yml` templates first appear.
 **Read:** `configserver/src/main/resources/application.yml` and the `config/` folder (`accounts.yml`, `accounts-qa.yml`,
 `accounts-prod.yml`); `docker-compose/`.
 
-## Section 7 – Docker Compose (`section7/`)
-**New:** one `docker-compose.yml` per profile (`default`, `qa`, `prod`) with shared `common-config.yml` using `extends`,
-health checks, `depends_on: condition: service_healthy` (start order: config server → services), a shared network and
-memory limits.
-**Read:** `docker-compose/default/docker-compose.yml` and `common-config.yml`.
+## Section 7 – MySQL databases (`section7/`)
+**New:** a **real database per service**. `accounts`, `loans` and `cards` switch from in-memory H2 to three separate MySQL containers (`accountsdb`, `loansdb`, `cardsdb`, host ports 3306/3307/3308).
+`application.yml` gets a `jdbc:mysql://…` URL and `sql.init.mode: always` so `schema.sql` runs on start-up; the `h2` dependency is replaced by `mysql-connector-j`. The Compose file adds
+a `microservice-db-config` template with a `mysqladmin ping` health check, and each service `depends_on` its own DB being healthy.
+**Read:** `accounts/src/main/resources/application.yml`, `schema.sql`, `docker-compose/default/common-config.yml`.
 **Run:** `cd section7/docker-compose/default && docker compose up -d`
+(Compose files with the `default`/`qa`/`prod` profile folders first appear in **section 6 v2**, next to the Config Server and a RabbitMQ container used by Spring Cloud Bus.)
 
 ## Section 8 – Service discovery & registration (`section8/`)
 **New:** the **`eurekaserver`** and Feign clients (`CardsFeignClient`, `LoansFeignClient`) so Accounts calls other
@@ -63,7 +64,7 @@ global filters (`RequestTraceFilter`, `ResponseTraceFilter`) that generate/propa
   limiter** on cards. This is why `docker-compose` gains a `redis` service.
 * Service: `@Retry`, `@RateLimiter`, Feign circuit breaker with fallback classes (`LoansFallback`, `CardsFallback`).
 Settings live under `resilience4j.*` in `application.yml`.
-**Try:** stop `loans`, call `fetchCustomerDetails` → the response still returns, without the loans block.
+**Try:** stop `loans`, call `fetchCustomerDetails` → the response still returns 200, with `loansDto: null`.
 
 ## Section 11 – Observability & monitoring (`section_11/`)
 **New:** the "three pillars", all in `docker-compose/observability/`:

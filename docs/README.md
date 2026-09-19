@@ -10,6 +10,7 @@ same project at a later stage of evolution**. So you read the sections in order,
 | [02-sections-guide.md](02-sections-guide.md) | Section-by-section walkthrough: what each folder adds and which files to read |
 | [03-services-reference.md](03-services-reference.md) | Ports, REST endpoints, config, messaging topics, security roles per service |
 | [04-running-with-docker.md](04-running-with-docker.md) | How to run the full stack in Docker Desktop, URLs, sample calls, troubleshooting |
+| [walkthrough/](walkthrough/00-start-here.md) | **Teaching walkthrough:** every section explained from scratch with the code walked through line by line |
 
 ## The 30-second version
 
@@ -30,8 +31,8 @@ Observability (Grafana, Prometheus, Loki, Tempo) watches all of it.
 |--------|------------------------|
 | `section2` | Plain Spring Boot REST microservices (accounts, loans, cards) |
 | `section4` | Dockerfiles, Buildpacks, Jib: containerising each service |
-| `section6` | Configuration management: `v1-springboot` (profiles, `@ConfigurationProperties`) → `v2-spring-cloud-config` (Config Server) |
-| `section7` | Docker Compose plus profiles (`default`/`qa`/`prod`) |
+| `section6` | Configuration management: `v1-springboot` (profiles, `@ConfigurationProperties`) → `v2-spring-cloud-config` (Config Server, Spring Cloud Bus, first Docker Compose with profiles) |
+| `section7` | MySQL: a real database per service (three MySQL containers) |
 | `section8` | Service discovery: Eureka server, Feign clients, load balancing |
 | `section9` | Edge server: Spring Cloud Gateway, routing, correlation-id filters |
 | `section_10` | Resilience4j: circuit breaker, retry, rate limiter, time limiter (plus Redis) |

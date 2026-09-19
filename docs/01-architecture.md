@@ -78,7 +78,7 @@ Because the databases are in-memory, **data is lost whenever a container restart
 1. Gateway → Accounts `CustomerController`.
 2. `CustomersServiceImpl` reads the customer + account from H2, then calls **Loans** and **Cards** through
    Feign clients (`lb://` via Eureka), forwarding the correlation id.
-3. If Loans or Cards is down, the Feign fallback returns `null` and the response simply omits that block, instead
+3. If Loans or Cards is down, the Feign fallback returns `null` and the response still returns `200` with that block set to `null`, instead
    of failing (a resilience demo).
 
 ## Technology stack (section 14 `pom.xml`)

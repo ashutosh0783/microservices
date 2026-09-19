@@ -90,7 +90,7 @@ docker logs accounts-ms | grep Communication  # "Updating Communication status f
 ### 5. Watch resilience
 ```bash
 docker stop loans-ms
-curl "$H/accounts/api/fetchCustomerDetails?mobileNumber=4354437687"   # still 200, just without loansDto
+curl "$H/accounts/api/fetchCustomerDetails?mobileNumber=4354437687"   # still 200, but loansDto is null
 docker start loans-ms
 ```
 
