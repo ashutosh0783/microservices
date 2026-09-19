@@ -29,3 +29,6 @@ target/
 build/
 !**/src/main/**/build/
 !**/src/test/**/build/
+
+# Docker Compose runtime data (MinIO volume)
+.data/
