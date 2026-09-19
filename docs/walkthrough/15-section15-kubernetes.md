@@ -1,7 +1,6 @@
 # Chapter 15: Container orchestration with Kubernetes (`section_15/kubernetes/`)
 
-> **Verification note:** this chapter is a code walkthrough. This machine has `kubectl` but **no Kubernetes cluster enabled** in Docker Desktop, so I did not apply these manifests. Everything below is read straight from the files. Enable
-> *Settings → Kubernetes* in Docker Desktop if you want to run them.
+> **Verification note:** I ran these manifests on Docker Desktop's Kubernetes (single node, Kubernetes v1.36.1, `kind` mode). The results are in section 4b. The line-by-line walkthrough in section 3 comes from reading the files, and section 4b confirms the behaviour.
 
 ## 1. The problem
 Docker Compose runs containers on **one machine**. Production needs:
@@ -153,7 +152,7 @@ There are 8 numbered files, applied in order because later ones depend on earlie
 ### 3.4 The gateway: `8_gateway.yml`
 Same shape as accounts, with `image: eazybytes/gatewayserver:s12`, port **8072**, and one extra environment variable, the JWKS URL (lines 43–47), taken from the ConfigMap. Its Service is `type: LoadBalancer` on 8072: **the only thing you really need exposed to the outside**. The other Services could be `ClusterIP`; the course leaves them as LoadBalancer for easy poking during learning.
 
-## 4. Try it (needs Kubernetes enabled in Docker Desktop)
+## 4. Try it (needs Kubernetes enabled in Docker Desktop; section 4b shows what happened when I did)
 ```bash
 kubectl config use-context docker-desktop
 kubectl apply -f section_15/kubernetes/
@@ -165,6 +164,44 @@ kubectl delete pod <one-accounts-pod>   # watch it be recreated instantly (self-
 kubectl describe pod <pod>              # events explain why a pod is Pending/CrashLoopBackOff
 ```
 Useful states: `Pending` (can't be scheduled yet), `ImagePullBackOff` (image name/tag wrong), `CrashLoopBackOff` (app starts then dies; read `kubectl logs --previous`).
+
+## 4b. What I observed when I ran it
+**Enabling Kubernetes.** Kubernetes was off. Docker Desktop's CLI has no "enable" command, so I set `"KubernetesEnabled": true` in `%APPDATA%\Docker\settings-store.json` (saving a `.bak-before-k8s` copy first) and ran `docker desktop restart`.
+About a minute later `docker desktop kubernetes status` reported `running`, `Mode: kind`, `Node Count: 1`, and `kubectl get nodes` showed `desktop-control-plane   Ready   v1.36.1`.
+I had to stop the Docker Compose stack first: the host had only ~1.3 GB of free RAM, and the Kubernetes Services use the same host ports (7080, 8070, 8071, 8072).
+
+**Applying the manifests.** `kubectl apply -f` on files 1 to 8 created 7 Deployments, 7 Services and the ConfigMap in one go. Within about two minutes all seven pods were `1/1 Running`:
+
+| Pod | Result |
+|-----|--------|
+| keycloak, configserver, accounts, loans, cards, gatewayserver | `Running`, 0 restarts |
+| eurekaserver | `Running`, **1 restart** |
+
+The Eureka restart is the missing-startup-order trap from section 5: everything starts simultaneously, and Eureka booted before the config server could serve it, so it crashed once and Kubernetes restarted it automatically (self-healing in action).
+
+**Reaching the services.** The `LoadBalancer` Services show internal `EXTERNAL-IP`s like `172.18.0.11`, but on Docker Desktop they are also reachable at `localhost` on the same ports:
+`localhost:8070` returned 200 (Eureka), `localhost:8072` (gateway) and `localhost:8071` (config server) returned 404 for `/` (there is no root page, which is expected), and `localhost:7080` returned 302 (Keycloak redirecting to its login).
+
+**Where does the ConfigMap take effect?** `GET localhost:8072/eazybank/accounts/api/contact-info` returned the **prod** contact details (name "Reine Aishwarya", message ending "accounts related prod APIs"), because `2_configmaps.yaml` sets `SPRING_PROFILES_ACTIVE: "prod"`, so the Config Server returned `accounts-prod.yml`. This is chapter 6's profile mechanism working through a Kubernetes ConfigMap.
+
+**End-to-end, same as the Docker Compose stack.**
+- **Eureka** listed `ACCOUNTS`, `CARDS`, `GATEWAYSERVER` and `LOANS`, all `UP` (so Eureka still works inside Kubernetes, layered on top of Kubernetes' own Services).
+- After running `docs/scripts/setup-keycloak.sh` against the new Keycloak: `POST /eazybank/accounts/api/create` **without a token gave 401**; **with a token, creating an account, a loan and a card each gave 201**; and `fetchCustomerDetails` returned **200 with all three blocks** (`accountsDto`, `loansDto`, `cardsDto`).
+- (Section 15 runs the section-12 images, so there is no Kafka or `message` service in this stack.)
+
+**Why `docker ps` is empty.** In `kind` mode the pods run *inside* one hidden node container, so **they don't appear as containers in Docker Desktop's Containers tab**, and `docker ps` shows nothing. Look at them with `kubectl` (or the dashboard below). Also note that `kubectl apply` creates objects in the cluster's own database; it **creates no files** in your project.
+
+**Seeing it in a browser: Kubernetes Dashboard.** I installed the official Dashboard v2.7.0 (no Helm needed):
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.7.0/aio/deploy/recommended.yaml
+kubectl create serviceaccount admin-user -n kubernetes-dashboard
+kubectl create clusterrolebinding admin-user --clusterrole=cluster-admin --serviceaccount=kubernetes-dashboard:admin-user
+kubectl -n kubernetes-dashboard create token admin-user --duration=24h     # paste this into the login page
+kubectl proxy --port=8001                                                  # leave running
+# open: http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:/proxy/
+```
+Choose **Token**, paste the token, then switch the namespace dropdown to `default` to see the deployments, pods, services and logs. **Warning:** `cluster-admin` gives that token full control of the cluster.
+That is fine on a local learning cluster, not on a shared one. I confirmed with `kubectl auth can-i '*' '*' --as=system:serviceaccount:kubernetes-dashboard:admin-user` (→ `yes`). The Dashboard's CPU/memory graphs stay empty unless you also install `metrics-server`.
 
 ## 5. Traps and senior notes
 - **Startup ordering doesn't exist here.** Compose had `depends_on: service_healthy`. Kubernetes starts everything at once, so `accounts` may boot before the config server is ready. Spring Boot's retry behaviour, **readiness probes** and init containers are how you cope.
